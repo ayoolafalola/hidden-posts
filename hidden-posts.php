@@ -57,7 +57,24 @@ class Ayoola_HidePosts {
 			add_option( 'custom-plugin-page', $saved_page_id );
 
 			//	add role
-			add_role( self::$_role, __( "Hidden Contributor" ), array('read' => true));			
+			add_role( self::$_role, __( "Hidden Contributor" ), array('read' => true ));
+			
+			//	Add category
+			$term_id = get_option( 'custom-plugin-category' );
+
+			// Check if the saved page id exists.
+			if( empty( $term_id ) ) {
+
+				$term = wp_insert_term( 'Sports Betting', 'category', array(
+					'description' => 'Dedicated category for this category so as to hide it easily',
+					'slug'        => 'sport-betting'
+				  )
+			  );
+  
+			  add_option( 'custom-plugin-category', $term['term_id'] );
+  
+			}
+
 
 		});
 
@@ -80,6 +97,16 @@ class Ayoola_HidePosts {
 			//	Remove Role
 			remove_role( self::$_role );
 
+			$term_id = get_option( 'custom-plugin-category' );
+
+			// Check if the saved page id exists.
+			if ( $term_id ) {
+				//	don't delete term again so we don't change ids
+				//wp_delete_term( $term_id, 'category' );
+				//delete_option( 'custom-plugin-category' );
+			}
+
+
 		});
 
 		// function that runs when shortcode is called
@@ -88,6 +115,7 @@ class Ayoola_HidePosts {
 
 			// Output needs to be return
 		}
+
 		// register shortcode
 		add_shortcode('custom-plugin', 'custom_plugin_shortcode');
 
@@ -132,8 +160,65 @@ class Ayoola_HidePosts {
 			shortcode_restricted_page( array( self::$_role ) );
 		});
 
-		error_reporting(-1);
-		ini_set('display_errors', 1);
+		
+		
+		//	hide post in list
+		add_filter( 'pre_get_posts', function($query) {
+
+			$removeFromList = function() use ( $query )
+			{
+				//	exclude custom category from post list in home page
+				$category = get_option( 'custom-plugin-category' );
+				$query->set( 'cat', '-' . $category  );
+
+			};
+			
+			if ( $query->is_home() ) {
+				$removeFromList();
+			}
+
+			elseif( $query->is_archive() && $query->is_main_query() )
+			{
+				$removeFromList();
+			}
+			return $query;
+		});
+
+
+		
+		add_action('save_post', function($post_ID){
+
+
+			$user = wp_get_current_user();
+			$roles = ( array ) $user->roles;
+
+			//	do this for specified role
+			if( ! in_array( self::$_role, $roles ) )
+			{
+				return;
+			}
+
+			if(wp_is_post_autosave($post_ID) || wp_is_post_revision($post_ID)) {
+				return;
+			} //	If this is just an autosave or post revision, don't do anything
+		
+			$postFormat = get_post_format( $post_ID ); //Get the post format of current post
+		
+			if( !empty( $postFormat ) ) {
+				return;
+			} //If post is not a standard format, don't do anything
+		
+			$currentCat = get_the_category(); //Get the current set Category
+			//$defaultCat = get_cat_ID( "test" ); //Get ID of "test" category
+		
+			//if( empty( $currentCat ) ) 
+			{ 
+				//Check if category is set
+				wp_set_post_categories( $post_ID, get_option( 'custom-plugin-category' ) );  //Set the current post ID's Category to "test"
+			}
+		});
+		//error_reporting(-1);
+		//ini_set('display_errors', 1);
 	}
 
 	public static function changeUseRole ( $user_id, $newRole )
