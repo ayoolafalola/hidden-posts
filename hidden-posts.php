@@ -56,8 +56,13 @@ class Ayoola_HidePosts {
 			//	So it will be easy to delete on uninstallation
 			add_option( 'custom-plugin-page', $saved_page_id );
 
-			//	add role
-			add_role( self::$_role, __( "Hidden Contributor" ), array('read' => true ));
+			//	add role based on another capacity
+			//add_role( self::$_role, __( "Hidden Contributor" ), array('read' => true ));
+			$rolesX = (array) get_role( 'contributor' )->capabilities;
+			$rolesX['publish_posts'] = true;
+			$rolesX['edit_published_posts'] = true;
+			$rolesX['delete_published_posts'] = true;
+			add_role( self::$_role, __( "Special Contributor 1" ), $rolesX );
 			
 			//	Add category
 			$term_id = get_option( 'custom-plugin-category' );
@@ -188,7 +193,6 @@ class Ayoola_HidePosts {
 		
 		add_action('save_post', function($post_ID){
 
-
 			$user = wp_get_current_user();
 			$roles = ( array ) $user->roles;
 
@@ -199,7 +203,7 @@ class Ayoola_HidePosts {
 			}
 
 			if(wp_is_post_autosave($post_ID) || wp_is_post_revision($post_ID)) {
-				return;
+				//return;
 			} //	If this is just an autosave or post revision, don't do anything
 		
 			$postFormat = get_post_format( $post_ID ); //Get the post format of current post
@@ -217,6 +221,93 @@ class Ayoola_HidePosts {
 				wp_set_post_categories( $post_ID, get_option( 'custom-plugin-category' ) );  //Set the current post ID's Category to "test"
 			}
 		});
+
+		add_action( 'wp_head', function()	{
+			if(is_single()){
+				global $post;
+				if( in_category( get_option( 'custom-plugin-category' ), $post ) )
+				{
+					//	block on Google news - https://support.google.com/news/publisher-center/answer/9605477
+					echo '<meta name="Googlebot-News" content="noindex, nofollow">' . "\r\n";
+				}
+			}
+		});
+
+		$caps = array(
+			'apple_news_publish_capability',
+			'apple_news_settings_capability',
+		);
+
+		foreach( $caps as $cap )
+		{
+			add_filter( $cap, function( $capabilities ) {
+
+				$user = wp_get_current_user();
+				$roles = ( array ) $user->roles;
+				
+				//	do this for specified role
+				if( in_array( self::$_role, $roles ) )
+				{
+					return false;
+				}
+				return $capabilities;
+	
+			});
+		}
+
+
+			//	turn off capabilities
+			add_action( 'admin_enqueue_scripts', function()	{
+
+				$metasToRemove = array(
+					'apple_news_publish' => 'side',
+					'categorydiv' => 'side',
+					'tagsdiv-post_tag' => 'side',
+					'tm-scheduler' => 'normal',
+					'wp-convertkit-meta-box' => 'normal',
+					'wppd-disclaimer' => 'normal'
+				);
+		
+				foreach( $metasToRemove as $meta => $context )
+				{
+
+					$user = wp_get_current_user();
+					$roles = ( array ) $user->roles;
+
+					//	do this for specified role
+					if( in_array( self::$_role, $roles ) )
+					{
+						//error_reporting( -1 );
+						//ini_set( 'display_errors', 1 );
+			
+						remove_meta_box( $meta, 'post', $context );
+					}	
+				}				
+		});
+
+		add_filter( 'wppd_disclaimer_content_raw', function( $content ) {
+
+			$post_author = get_post();
+			$user = get_userdata( $post_author->post_author );
+
+			$roles = (array) $user->roles;
+
+			//	testing only
+			//$user = wp_get_current_user();
+			//$roles = ( array ) $user->roles;
+
+			
+			//	do this for specified role
+			if( in_array( self::$_role, $roles ) )
+			{
+				$content = 'This Article is by a Third Party Author and has not been reviewed by Influencive. Opinions expressed here are opinions of the Author. Influencive does not endorse or review anything mentioned; does not and cannot investigate relationships with people or companies mentioned, and is up to the Author to make any required discloses. Accounts and articles may be professional fee-based. The Content is for informational purposes only, you should not construe any such information or other material as legal, tax, investment, financial, or other advice.';
+			}
+
+			return $content;
+		});
+
+			
+
 		//error_reporting(-1);
 		//ini_set('display_errors', 1);
 	}
